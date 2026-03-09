@@ -1,0 +1,42 @@
+service:
+  timezone: "Asia/Shanghai"
+  poll_interval_seconds: 600
+  window_start: "09:10:00"
+  window_end: "19:00:00"
+
+gold_api:
+  base_url: "https://sapi.k780.com/"
+  gold_id: "1051"
+  app_key: "${GD_APP_KEY}"
+  sign: "${GD_SIGN}"
+
+notify:
+  bark_endpoint: "https://api.day.app/push"
+  device_keys:
+    - "${DEVICE_KEYS_1}"
+  group: "gold-watch"
+  title_prefix: "黄金提醒"
+
+strategy:
+  dedup_by_uptime: true
+  min_change_percent: 0
+  max_silent_minutes: 120
+
+reliability:
+  http_timeout_seconds: 10
+  max_retries: 3
+  retry_backoff_seconds: 2
+  failure_alert_threshold: 3
+
+state:
+  file_path: "./data/state.json"
+
+http_server:
+  enable: false
+  listen_addr: "127.0.0.1:18080"
+
+log:
+  # 日志输出目标：stdout（标准输出）或文件路径（如 ./logs/app.log）
+  output: "stdout"
+  # 日志级别：debug / info / warn / error
+  level: "info"

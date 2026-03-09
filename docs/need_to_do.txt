@@ -1,0 +1,54 @@
+我需要你帮我设计这么一个服务，间隔固定时间后获取黄金报价，从 API 中获取，并通过 API 通知用户
+从配置中读取起始时间和结束时间，每隔固定时间获取一次数据并进行通知
+
+API 获取数据格式如下
+GET https://sapi.k780.com/?app=finance.gold_price&goldid=1051&appkey=APPKEY&sign=SIGN&format=json
+```
+1.成功
+{
+  "success": "1",
+  "result": {
+        dtQuery: "1051",
+        dtCount: "1",
+        dtList: {
+            "1051": {
+                "goldid":"1051",
+                "variety": "AuT+D", /*品种*/
+                "varietynm": "黄金T+D", /*品种名称*/
+                "last_price": "403.1", /*当前价*/
+                "buy_price": "402.85", /*买入价*/
+                "sell_price": "403.1", /*卖出价*/
+                "high_price": "404.97", /*最高价*/
+                "low_price": "402.6", /*最低价*/
+                "open_price": "395.75", /*开盘价*/
+                "yesy_price": "397.13", /*昨收价*/
+                "change_price": "5.97", /*涨跌额*/
+                "change_margin": "1.5%", /*涨跌幅*/
+                "uptime": "2022-06-13 16:58:39" /*更新时间 (行情有变化uptime才会更新)*/
+            },
+ 
+.....
+
+2.系统错误
+{
+    "success":"0",
+    "msgid":"...",
+    "msg":"..."
+}
+```
+
+API 通知我计划使用开源库 Bark，文档为 https://bark.day.app/#/tutorial
+这是一个专门用户通知苹果设备的服务
+curl -X "POST" "https://api.day.app/push" \
+     -H 'Content-Type: application/json; charset=utf-8' \
+     -d '{
+  "body": "Test Body",
+  "title": "Test Title",
+  "group": "group1"
+  "device_key": "your_key"
+}'
+
+
+我现在还没想好是否需要引入其他功能，例如通过数据库记录历史数据和发送记录（感觉这个可能没必要）
+ 你可以看看是否需要再引入其他功能
+
