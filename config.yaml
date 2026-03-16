@@ -16,7 +16,7 @@ notify:
     - "${DEVICE_KEYS_1}"
     - "${DEVICE_KEYS_2}"
   group: "gold-watch"
-  title_prefix: "黄金提醒"
+  title_prefix: "金价"
 
 strategy:
   dedup_by_uptime: true
