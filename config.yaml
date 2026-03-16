@@ -14,6 +14,7 @@ notify:
   bark_endpoint: "https://api.day.app/push"
   device_keys:
     - "${DEVICE_KEYS_1}"
+    - "${DEVICE_KEYS_2}"
   group: "gold-watch"
   title_prefix: "黄金提醒"
 
