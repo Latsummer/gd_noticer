@@ -9,6 +9,11 @@ BINARY := $(BUILD_DIR)/$(APP_NAME)
 # 配置文件
 CONFIG := config.yaml
 
+# Docker 相关
+DOCKER_IMAGE := $(APP_NAME)
+DOCKER_TAG ?= latest
+DOCKER_CONTAINER := $(APP_NAME)
+
 # Go 相关
 GOCMD := go
 GOBUILD := $(GOCMD) build
@@ -23,7 +28,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 BUILD_TIME := $(shell date '+%Y-%m-%d %H:%M:%S')
 LDFLAGS := -s -w
 
-.PHONY: all build run clean fmt vet test tidy help
+.PHONY: all build run clean fmt vet test tidy help docker-build docker-run docker-stop docker-clean
 
 ## all: 默认目标，格式化 + 静态检查 + 构建
 all: fmt vet build
@@ -68,3 +73,27 @@ help:
 	@echo ""
 	@grep -E '^## ' Makefile | sed 's/## /  /' | column -t -s ':'
 	@echo ""
+
+## docker-build: 构建 Docker 镜像
+docker-build:
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	@echo "Docker 镜像构建完成: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
+## docker-run: 运行 Docker 容器
+docker-run:
+	docker run -d \
+		--name $(DOCKER_CONTAINER) \
+		--restart=always \
+		-v $(PWD)/data:/app/data \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)
+	@echo "Docker 容器已启动: $(DOCKER_CONTAINER)"
+
+## docker-stop: 停止并移除 Docker 容器
+docker-stop:
+	docker stop $(DOCKER_CONTAINER) && docker rm $(DOCKER_CONTAINER)
+	@echo "Docker 容器已停止并移除"
+
+## docker-clean: 移除 Docker 镜像
+docker-clean: docker-stop
+	docker rmi $(DOCKER_IMAGE):$(DOCKER_TAG)
+	@echo "Docker 镜像已移除"
