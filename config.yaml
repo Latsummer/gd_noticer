@@ -5,16 +5,22 @@ service:
   window_end: "19:00:00"
 
 gold_api:
+  # API 类型：standard（标准行情）或 fusion（融合行情，整合SH金和国际金价）
+  api_type: "fusion"
   base_url: "https://sapi.k780.com/"
   gold_id: "1051"
+  # 融合行情品种 ID（api_type 为 fusion 时使用，共用 base_url）
+  fusion_gold_id: "1301"
   app_key: "${GD_APP_KEY}"
   sign: "${GD_SIGN}"
+  id_to_name:
+    "1051": 黄金 T+D
+    "1301": 融合行情
 
 notify:
   bark_endpoint: "https://api.day.app/push"
-  device_keys:
-    - "${DEVICE_KEYS_1}"
-    - "${DEVICE_KEYS_2}"
+  # 多个设备密钥用英文逗号分隔，如：key1,key2,key3
+  device_keys: "${DEVICE_KEYS}"
   group: "gold-watch"
   title_prefix: "金价"
 

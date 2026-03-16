@@ -70,8 +70,10 @@ func main() {
 
 	// 第四步：初始化黄金 API 客户端
 	goldCli := gold.NewClient(gold.ClientConfig{
+		ApiType:             cfg.GoldAPI.ApiType,
 		BaseURL:             cfg.GoldAPI.BaseURL,
 		GoldID:              cfg.GoldAPI.GoldID,
+		FusionGoldID:        cfg.GoldAPI.FusionGoldID,
 		AppKey:              cfg.GoldAPI.AppKey,
 		Sign:                cfg.GoldAPI.Sign,
 		HTTPTimeoutSeconds:  cfg.Reliability.HTTPTimeoutSeconds,
@@ -84,6 +86,7 @@ func main() {
 		DedupByUptime:    cfg.Strategy.DedupByUptime,
 		MinChangePercent: cfg.Strategy.MinChangePercent,
 		MaxSilentMinutes: cfg.Strategy.MaxSilentMinutes,
+		IsFusion:         cfg.GoldAPI.ApiType == "fusion",
 	})
 
 	// 第六步：初始化 Bark 通知器

@@ -42,8 +42,10 @@ type apiResponse struct {
 
 // ClientConfig 定义客户端初始化参数。
 type ClientConfig struct {
-	BaseURL             string
-	GoldID              string
+	ApiType             string // API 类型：standard（标准行情）或 fusion（融合行情）
+	BaseURL             string // API 地址（标准行情与融合行情共用）
+	GoldID              string // 标准行情品种 ID
+	FusionGoldID        string // 融合行情品种 ID
 	AppKey              string
 	Sign                string
 	HTTPTimeoutSeconds  int
@@ -133,12 +135,29 @@ func (c *Client) doFetch(ctx context.Context) (*QuoteItem, error) {
 		return nil, fmt.Errorf("API 返回错误: msgid=%s, msg=%s", apiResp.MsgID, apiResp.Msg)
 	}
 
-	quote, ok := apiResp.Result.DtList[c.cfg.GoldID]
+	goldID := c.activeGoldID()
+	quote, ok := apiResp.Result.DtList[goldID]
 	if !ok {
-		return nil, fmt.Errorf("响应中未找到 gold_id=%s 的数据", c.cfg.GoldID)
+		// 融合行情的 dtList key 可能与 goldid 不一致，尝试取第一条数据
+		for _, item := range apiResp.Result.DtList {
+			quote = item
+			ok = true
+			break
+		}
+		if !ok {
+			return nil, fmt.Errorf("响应中未找到 gold_id=%s 的数据", goldID)
+		}
 	}
 
 	return &quote, nil
+}
+
+// activeGoldID 根据 API 类型返回当前使用的 GoldID。
+func (c *Client) activeGoldID() string {
+	if c.cfg.ApiType == "fusion" {
+		return c.cfg.FusionGoldID
+	}
+	return c.cfg.GoldID
 }
 
 // buildURL 构建完整的 API 请求 URL。
@@ -150,7 +169,7 @@ func (c *Client) buildURL() (string, error) {
 
 	params := url.Values{}
 	params.Set("app", "finance.gold_price")
-	params.Set("goldid", c.cfg.GoldID)
+	params.Set("goldid", c.activeGoldID())
 	params.Set("appkey", c.cfg.AppKey)
 	params.Set("sign", c.cfg.Sign)
 	params.Set("format", "json")

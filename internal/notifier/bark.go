@@ -140,7 +140,7 @@ func (b *BarkNotifier) sendToDevice(ctx context.Context, deviceKey, title, body 
 	}
 
 	if barkResp.Code != 200 {
-		return fmt.Errorf("Bark API 返回错误: code=%d, message=%s", barkResp.Code, barkResp.Message)
+		return fmt.Errorf("bark API 返回错误: code=%d, message=%s", barkResp.Code, barkResp.Message)
 	}
 
 	return nil

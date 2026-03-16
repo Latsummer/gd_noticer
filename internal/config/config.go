@@ -33,18 +33,23 @@ type ServiceConfig struct {
 
 // GoldAPIConfig 定义黄金报价 API 的连接参数。
 type GoldAPIConfig struct {
-	BaseURL string `yaml:"base_url"`
-	GoldID  string `yaml:"gold_id"`
-	AppKey  string `yaml:"app_key"`
-	Sign    string `yaml:"sign"`
+	ApiType      string            `yaml:"api_type"`       // API 类型：standard（标准行情）或 fusion（融合行情），默认 standard
+	BaseURL      string            `yaml:"base_url"`       // API 地址（标准行情与融合行情共用）
+	GoldID       string            `yaml:"gold_id"`        // 标准行情品种 ID
+	FusionGoldID string            `yaml:"fusion_gold_id"` // 融合行情品种 ID
+	AppKey       string            `yaml:"app_key"`
+	Sign         string            `yaml:"sign"`
+	IDToName     map[string]string `yaml:"id_to_name"` // 品种 ID 到自定义名称的映射（用于通知标题）
 }
 
 // NotifyConfig 定义 Bark 推送通知参数，支持多个设备。
+// DeviceKeysRaw 为原始配置字符串（多个 key 用英文逗号分隔），解析后存入 DeviceKeys。
 type NotifyConfig struct {
-	BarkEndpoint string   `yaml:"bark_endpoint"`
-	DeviceKeys   []string `yaml:"device_keys"`
-	Group        string   `yaml:"group"`
-	TitlePrefix  string   `yaml:"title_prefix"`
+	BarkEndpoint  string   `yaml:"bark_endpoint"`
+	DeviceKeysRaw string   `yaml:"device_keys"`
+	DeviceKeys    []string `yaml:"-"` // 解析后的设备密钥列表，不直接从 YAML 读取
+	Group         string   `yaml:"group"`
+	TitlePrefix   string   `yaml:"title_prefix"`
 }
 
 // StrategyConfig 定义通知策略参数。
@@ -99,6 +104,9 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
+	// 解析逗号分隔的 device_keys 字符串为列表
+	cfg.Notify.DeviceKeys = splitAndTrim(cfg.Notify.DeviceKeysRaw)
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("配置校验失败: %w", err)
 	}
@@ -125,6 +133,20 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.GoldAPI.Sign) == "" {
 		return fmt.Errorf("gold_api.sign 不能为空")
+	}
+	// API 类型校验
+	apiType := strings.ToLower(strings.TrimSpace(c.GoldAPI.ApiType))
+	if apiType == "" {
+		apiType = "standard"
+		c.GoldAPI.ApiType = apiType
+	}
+	if apiType != "standard" && apiType != "fusion" {
+		return fmt.Errorf("gold_api.api_type 必须为 standard 或 fusion，当前值: %q", c.GoldAPI.ApiType)
+	}
+	if apiType == "fusion" {
+		if strings.TrimSpace(c.GoldAPI.FusionGoldID) == "" {
+			return fmt.Errorf("gold_api.fusion_gold_id 在 api_type 为 fusion 时不能为空")
+		}
 	}
 
 	// 通知配置校验：至少有一个有效的 device_key
@@ -158,4 +180,16 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// splitAndTrim 将逗号分隔的字符串拆分为列表，去除每项前后空白并过滤空值。
+func splitAndTrim(raw string) []string {
+	var result []string
+	for _, s := range strings.Split(raw, ",") {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
 }

@@ -151,8 +151,9 @@ func (s *Scheduler) execute(ctx context.Context) {
 
 	// 第三步：发送通知（如果需要）
 	if decision.ShouldNotify {
-		title := strategy.FormatNotifyTitle(s.cfg.Notify.TitlePrefix, quote)
-		body := strategy.FormatNotifyBody(quote)
+		title := strategy.FormatNotifyTitle(s.cfg.Notify.TitlePrefix, quote, s.cfg.GoldAPI.IDToName)
+		isFusion := s.cfg.GoldAPI.ApiType == "fusion"
+		body := strategy.FormatNotifyBody(quote, isFusion)
 
 		results := s.bark.Send(ctx, title, body)
 

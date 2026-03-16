@@ -25,6 +25,7 @@ type StrategyConfig struct {
 	DedupByUptime    bool    // 是否基于 uptime 去重
 	MinChangePercent float64 // 最小涨跌幅阈值（百分比，0 表示不过滤）
 	MaxSilentMinutes int     // 最大静默时间（分钟），超过后强制发送心跳
+	IsFusion         bool    // 是否为融合行情模式（融合行情的涨跌额/幅恒为 0，需特殊处理）
 }
 
 // Evaluator 是策略评估器。
@@ -64,8 +65,8 @@ func (e *Evaluator) Evaluate(quote *gold.QuoteItem, st state.State) Decision {
 		}
 	}
 
-	// 规则2：价格变化阈值过滤
-	if e.cfg.MinChangePercent > 0 {
+	// 规则2：价格变化阈值过滤（融合行情涨跌幅恒为 0，跳过该规则）
+	if e.cfg.MinChangePercent > 0 && !e.cfg.IsFusion {
 		changePercent := parseChangePercent(quote.ChangeMargin)
 		if math.Abs(changePercent) < e.cfg.MinChangePercent {
 			slog.Info("涨跌幅未达阈值，不通知",
@@ -117,7 +118,18 @@ func parseChangePercent(margin string) float64 {
 }
 
 // FormatNotifyBody 根据行情数据格式化通知消息体。
-func FormatNotifyBody(quote *gold.QuoteItem) string {
+// isFusion 为 true 时使用融合行情格式（不含涨跌额/幅，增加买卖价和高低价）。
+func FormatNotifyBody(quote *gold.QuoteItem, isFusion bool) string {
+	if isFusion {
+		return fmt.Sprintf("现价: %s，买入价: %s，卖出价: %s\n最高价: %s，最低价: %s\n更新时间: %s",
+			quote.LastPrice,
+			quote.BuyPrice,
+			quote.SellPrice,
+			quote.HighPrice,
+			quote.LowPrice,
+			quote.Uptime,
+		)
+	}
 	return fmt.Sprintf("现价: %s\n涨跌: %s (%s)\n更新时间: %s",
 		quote.LastPrice,
 		quote.ChangePrice,
@@ -127,6 +139,13 @@ func FormatNotifyBody(quote *gold.QuoteItem) string {
 }
 
 // FormatNotifyTitle 根据行情数据格式化通知标题。
-func FormatNotifyTitle(prefix string, quote *gold.QuoteItem) string {
-	return fmt.Sprintf("%s %s", prefix, quote.VarietyName)
+// idToName 为品种 ID 到自定义名称的映射，优先使用映射中的名称，否则使用 API 返回的品种名称。
+func FormatNotifyTitle(prefix string, quote *gold.QuoteItem, idToName map[string]string) string {
+	name := quote.VarietyName
+	if idToName != nil {
+		if customName, ok := idToName[quote.GoldID]; ok {
+			name = customName
+		}
+	}
+	return fmt.Sprintf("%s %s", prefix, name)
 }
