@@ -25,10 +25,13 @@ type Config struct {
 
 // ServiceConfig 定义服务运行时参数。
 type ServiceConfig struct {
-	Timezone            string `yaml:"timezone"`
-	PollIntervalSeconds int    `yaml:"poll_interval_seconds"`
-	WindowStart         string `yaml:"window_start"`
-	WindowEnd           string `yaml:"window_end"`
+	Timezone               string `yaml:"timezone"`
+	PollIntervalSeconds    int    `yaml:"poll_interval_seconds"`
+	WindowStart            string `yaml:"window_start"`
+	WindowEnd              string `yaml:"window_end"`
+	AdaptivePoll           bool   `yaml:"adaptive_poll"`             // 是否启用自适应轮询间隔
+	MinPollIntervalSeconds int    `yaml:"min_poll_interval_seconds"` // 自适应轮询最小间隔（秒）
+	MaxPollIntervalSeconds int    `yaml:"max_poll_interval_seconds"` // 自适应轮询最大间隔（秒）
 }
 
 // GoldAPIConfig 定义黄金报价 API 的连接参数。
@@ -54,9 +57,12 @@ type NotifyConfig struct {
 
 // StrategyConfig 定义通知策略参数。
 type StrategyConfig struct {
-	DedupByUptime    bool    `yaml:"dedup_by_uptime"`
-	MinChangePercent float64 `yaml:"min_change_percent"`
-	MaxSilentMinutes int     `yaml:"max_silent_minutes"`
+	DedupByUptime       bool    `yaml:"dedup_by_uptime"`
+	MinChangePercent    float64 `yaml:"min_change_percent"`
+	MaxSilentMinutes    int     `yaml:"max_silent_minutes"`
+	NotifyChangePercent float64 `yaml:"notify_change_percent"` // 距上次通知的累计变化 % 阈值（默认 0.3）
+	TrendReversalCount  int     `yaml:"trend_reversal_count"`  // 连续同向 N 次后反转视为拐点（默认 3）
+	PriceHistorySize    int     `yaml:"price_history_size"`    // 价格历史滑动窗口大小（默认 10）
 }
 
 // ReliabilityConfig 定义可靠性相关参数。
@@ -102,6 +108,23 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	// 设置新增配置项的默认值
+	if cfg.Strategy.NotifyChangePercent == 0 {
+		cfg.Strategy.NotifyChangePercent = 0.3
+	}
+	if cfg.Strategy.TrendReversalCount == 0 {
+		cfg.Strategy.TrendReversalCount = 3
+	}
+	if cfg.Strategy.PriceHistorySize == 0 {
+		cfg.Strategy.PriceHistorySize = 10
+	}
+	if cfg.Service.MinPollIntervalSeconds == 0 {
+		cfg.Service.MinPollIntervalSeconds = 180
+	}
+	if cfg.Service.MaxPollIntervalSeconds == 0 {
+		cfg.Service.MaxPollIntervalSeconds = 1200
 	}
 
 	// 解析逗号分隔的 device_keys 字符串为列表
@@ -163,6 +186,25 @@ func (c *Config) Validate() error {
 	// 策略配置校验
 	if c.Strategy.MaxSilentMinutes < 0 {
 		return fmt.Errorf("strategy.max_silent_minutes 必须 >= 0, 当前值: %d", c.Strategy.MaxSilentMinutes)
+	}
+	if c.Strategy.NotifyChangePercent < 0 {
+		return fmt.Errorf("strategy.notify_change_percent 必须 >= 0, 当前值: %f", c.Strategy.NotifyChangePercent)
+	}
+	if c.Strategy.TrendReversalCount < 2 {
+		return fmt.Errorf("strategy.trend_reversal_count 必须 >= 2, 当前值: %d", c.Strategy.TrendReversalCount)
+	}
+	if c.Strategy.PriceHistorySize < 3 {
+		return fmt.Errorf("strategy.price_history_size 必须 >= 3, 当前值: %d", c.Strategy.PriceHistorySize)
+	}
+
+	// 自适应轮询配置校验
+	if c.Service.AdaptivePoll {
+		if c.Service.MinPollIntervalSeconds < 30 {
+			return fmt.Errorf("service.min_poll_interval_seconds 必须 >= 30, 当前值: %d", c.Service.MinPollIntervalSeconds)
+		}
+		if c.Service.MaxPollIntervalSeconds <= c.Service.MinPollIntervalSeconds {
+			return fmt.Errorf("service.max_poll_interval_seconds 必须 > min_poll_interval_seconds")
+		}
 	}
 
 	// 可靠性配置校验

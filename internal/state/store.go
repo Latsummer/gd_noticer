@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+// PricePoint 表示一个价格采样点，用于价格历史滑动窗口。
+type PricePoint struct {
+	Price  float64   `json:"price"`
+	Time   time.Time `json:"time"`
+	Uptime string    `json:"uptime"`
+}
+
 // State 表示服务运行时需要持久化的状态信息。
 type State struct {
 	LastSuccessUptime   string    `json:"last_success_uptime"`  // 最近一次成功拉取的行情更新时间
@@ -21,6 +28,15 @@ type State struct {
 	ConsecutiveFailures int       `json:"consecutive_failures"` // 连续失败次数
 	LastError           string    `json:"last_error"`           // 最近一次错误信息
 	LastFetchAt         time.Time `json:"last_fetch_at"`        // 最近一次拉取时间
+
+	// 智能通知相关字段
+	LastNotifyPrice string       `json:"last_notify_price"` // 上次通知时的价格
+	PriceHistory    []PricePoint `json:"price_history"`     // 价格滑动窗口（最近 N 条）
+	DailyHigh       float64      `json:"daily_high"`        // 今日最高价
+	DailyLow        float64      `json:"daily_low"`         // 今日最低价
+	DailyHighTime   string       `json:"daily_high_time"`   // 今日最高价时间
+	DailyLowTime    string       `json:"daily_low_time"`    // 今日最低价时间
+	DailyDate       string       `json:"daily_date"`        // 日期标记 "2006-01-02"，跨天时重置
 }
 
 // Store 管理状态的读写与持久化。
@@ -103,4 +119,21 @@ func (s *Store) save() error {
 	}
 
 	return nil
+}
+
+// AddPricePoint 追加价格采样点到 PriceHistory，并截断到 maxSize。
+func (st *State) AddPricePoint(point PricePoint, maxSize int) {
+	st.PriceHistory = append(st.PriceHistory, point)
+	if len(st.PriceHistory) > maxSize {
+		st.PriceHistory = st.PriceHistory[len(st.PriceHistory)-maxSize:]
+	}
+}
+
+// ResetDaily 当日期变更时清空日内高低点。
+func (st *State) ResetDaily(date string) {
+	st.DailyDate = date
+	st.DailyHigh = 0
+	st.DailyLow = 0
+	st.DailyHighTime = ""
+	st.DailyLowTime = ""
 }

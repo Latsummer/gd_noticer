@@ -3,6 +3,10 @@ service:
   poll_interval_seconds: 600
   window_start: "09:00:00"
   window_end: "22:30:00"
+  # 自适应轮询：根据价格波动率动态调整轮询间隔
+  adaptive_poll: true
+  min_poll_interval_seconds: 180   # 高波动时最短轮询间隔（秒）
+  max_poll_interval_seconds: 1200  # 低波动时最长轮询间隔（秒）
 
 gold_api:
   # API 类型：standard（标准行情）或 fusion（融合行情，整合SH金和国际金价）
@@ -28,6 +32,10 @@ strategy:
   dedup_by_uptime: true
   min_change_percent: 0
   max_silent_minutes: 120
+  # 智能通知策略
+  notify_change_percent: 0.3    # 距上次通知的累计变化 % 阈值
+  trend_reversal_count: 3       # 连续同向 N 次后反转视为拐点
+  price_history_size: 10        # 价格历史滑动窗口大小
 
 reliability:
   http_timeout_seconds: 10

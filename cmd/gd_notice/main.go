@@ -83,10 +83,13 @@ func main() {
 
 	// 第五步：初始化通知策略
 	evaluator := strategy.NewEvaluator(strategy.StrategyConfig{
-		DedupByUptime:    cfg.Strategy.DedupByUptime,
-		MinChangePercent: cfg.Strategy.MinChangePercent,
-		MaxSilentMinutes: cfg.Strategy.MaxSilentMinutes,
-		IsFusion:         cfg.GoldAPI.ApiType == "fusion",
+		DedupByUptime:       cfg.Strategy.DedupByUptime,
+		MinChangePercent:    cfg.Strategy.MinChangePercent,
+		MaxSilentMinutes:    cfg.Strategy.MaxSilentMinutes,
+		IsFusion:            cfg.GoldAPI.ApiType == "fusion",
+		NotifyChangePercent: cfg.Strategy.NotifyChangePercent,
+		TrendReversalCount:  cfg.Strategy.TrendReversalCount,
+		PriceHistorySize:    cfg.Strategy.PriceHistorySize,
 	})
 
 	// 第六步：初始化 Bark 通知器

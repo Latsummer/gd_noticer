@@ -1,11 +1,12 @@
 // Package scheduler 负责定时触发任务执行。
-// 支持时间窗口控制（仅在指定时段内执行），并通过执行锁保证同一时刻仅一个任务在运行。
+// 支持时间窗口控制（仅在指定时段内执行），自适应轮询间隔，并通过执行锁保证同一时刻仅一个任务在运行。
 package scheduler
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -48,14 +49,13 @@ func NewScheduler(
 	}
 }
 
-// Start 启动调度循环，按配置的间隔定时执行任务，直到 ctx 被取消。
+// Start 启动调度循环。当启用自适应轮询时使用动态间隔的 Timer，否则使用固定 Ticker。
 func (s *Scheduler) Start(ctx context.Context) {
-	interval := time.Duration(s.cfg.Service.PollIntervalSeconds) * time.Second
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	baseInterval := time.Duration(s.cfg.Service.PollIntervalSeconds) * time.Second
 
 	slog.Info("调度器已启动",
-		"interval", interval,
+		"interval", baseInterval,
+		"adaptive_poll", s.cfg.Service.AdaptivePoll,
 		"window_start", s.cfg.Service.WindowStart,
 		"window_end", s.cfg.Service.WindowEnd,
 	)
@@ -64,14 +64,88 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.tryExecute(ctx)
 
 	for {
+		interval := s.calcNextInterval()
+		slog.Debug("下次轮询间隔", "interval", interval)
+
+		timer := time.NewTimer(interval)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			slog.Info("调度器收到停止信号，正在退出")
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			s.tryExecute(ctx)
 		}
 	}
+}
+
+// calcNextInterval 根据价格波动率动态计算下次轮询间隔。
+// 高波动 → 短间隔（minInterval），低波动 → 长间隔（maxInterval）。
+func (s *Scheduler) calcNextInterval() time.Duration {
+	baseInterval := time.Duration(s.cfg.Service.PollIntervalSeconds) * time.Second
+
+	if !s.cfg.Service.AdaptivePoll {
+		return baseInterval
+	}
+
+	history := s.store.Get().PriceHistory
+	if len(history) < 2 {
+		return baseInterval
+	}
+
+	minInterval := time.Duration(s.cfg.Service.MinPollIntervalSeconds) * time.Second
+	maxInterval := time.Duration(s.cfg.Service.MaxPollIntervalSeconds) * time.Second
+
+	volatility := calcVolatility(history)
+
+	// 将波动率映射到 [minInterval, maxInterval]
+	// 波动率 0 → maxInterval，波动率 >= 1% → minInterval
+	// 使用线性插值，波动率阈值 1%
+	const highVolatilityThreshold = 1.0 // 百分比
+	ratio := volatility / highVolatilityThreshold
+	if ratio > 1 {
+		ratio = 1
+	}
+
+	// 高波动 ratio→1 → minInterval, 低波动 ratio→0 → maxInterval
+	interval := maxInterval - time.Duration(float64(maxInterval-minInterval)*ratio)
+
+	slog.Debug("自适应轮询计算",
+		"volatility_pct", fmt.Sprintf("%.4f", volatility),
+		"ratio", fmt.Sprintf("%.2f", ratio),
+		"interval", interval,
+		"history_len", len(history),
+	)
+
+	return interval
+}
+
+// calcVolatility 计算价格历史的波动率（极差 / 均值 * 100，百分比）。
+func calcVolatility(history []state.PricePoint) float64 {
+	if len(history) < 2 {
+		return 0
+	}
+
+	minPrice := history[0].Price
+	maxPrice := history[0].Price
+	sum := 0.0
+
+	for _, p := range history {
+		if p.Price < minPrice {
+			minPrice = p.Price
+		}
+		if p.Price > maxPrice {
+			maxPrice = p.Price
+		}
+		sum += p.Price
+	}
+
+	avg := sum / float64(len(history))
+	if avg == 0 {
+		return 0
+	}
+
+	return (maxPrice - minPrice) / avg * 100
 }
 
 // Trigger 手动触发一次任务执行（不受时间窗口限制）。
@@ -139,37 +213,77 @@ func (s *Scheduler) execute(ctx context.Context) {
 		"uptime", quote.Uptime,
 	)
 
-	// 第二步：策略判定
+	// 第二步：解析价格，更新价格历史和日内高低点
+	currentPrice := parsePrice(quote.LastPrice)
+	todayDate := now.In(s.loc).Format("2006-01-02")
+
+	s.store.Update(func(st *state.State) {
+		// 跨天重置日内高低点
+		if st.DailyDate != todayDate {
+			slog.Info("跨天重置日内高低点", "old_date", st.DailyDate, "new_date", todayDate)
+			st.ResetDaily(todayDate)
+		}
+
+		// 追加到价格历史
+		if currentPrice > 0 {
+			st.AddPricePoint(state.PricePoint{
+				Price:  currentPrice,
+				Time:   now,
+				Uptime: quote.Uptime,
+			}, s.cfg.Strategy.PriceHistorySize)
+
+			// 更新日内高低点
+			timeStr := now.In(s.loc).Format("15:04:05")
+			if st.DailyHigh == 0 || currentPrice > st.DailyHigh {
+				st.DailyHigh = currentPrice
+				st.DailyHighTime = timeStr
+			}
+			if st.DailyLow == 0 || currentPrice < st.DailyLow {
+				st.DailyLow = currentPrice
+				st.DailyLowTime = timeStr
+			}
+		}
+	})
+
+	// 第三步：策略判定（使用更新后的 state）
 	st := s.store.Get()
 	decision := s.evaluator.Evaluate(quote, st)
 
 	slog.Info("策略判定完成",
 		"event", "decide",
 		"should_notify", decision.ShouldNotify,
+		"notify_type", decision.NotifyType.String(),
 		"reason", decision.Reason,
 	)
 
-	// 第三步：发送通知（如果需要）
+	// 第四步：发送通知（如果需要）
 	if decision.ShouldNotify {
-		title := strategy.FormatNotifyTitle(s.cfg.Notify.TitlePrefix, quote, s.cfg.GoldAPI.IDToName)
 		isFusion := s.cfg.GoldAPI.ApiType == "fusion"
-		body := strategy.FormatNotifyBody(quote, isFusion)
+		title, body := strategy.FormatNotification(
+			s.cfg.Notify.TitlePrefix, quote, st, decision,
+			s.cfg.GoldAPI.IDToName, isFusion,
+		)
 
 		results := s.bark.Send(ctx, title, body)
 
 		if notifier.HasAnySuccess(results) {
-			slog.Info("通知发送成功", "event", "notify", "title", title)
+			slog.Info("通知发送成功",
+				"event", "notify",
+				"title", title,
+				"notify_type", decision.NotifyType.String(),
+			)
 			// 更新通知状态
 			s.store.Update(func(st *state.State) {
 				st.LastNotifyAt = now
 				st.LastNotifyDigest = fmt.Sprintf("%s_%s", quote.Uptime, quote.LastPrice)
+				st.LastNotifyPrice = quote.LastPrice
 			})
 		} else {
 			slog.Error("所有设备推送均失败", "event", "notify")
 		}
 	}
 
-	// 第四步：更新状态
+	// 第五步：更新拉取状态
 	s.store.Update(func(st *state.State) {
 		st.LastSuccessUptime = quote.Uptime
 		st.LastSuccessPrice = quote.LastPrice
@@ -177,6 +291,15 @@ func (s *Scheduler) execute(ctx context.Context) {
 		st.ConsecutiveFailures = 0
 		st.LastError = ""
 	})
+}
+
+// parsePrice 解析价格字符串为 float64。
+func parsePrice(priceStr string) float64 {
+	val, err := strconv.ParseFloat(priceStr, 64)
+	if err != nil {
+		return 0
+	}
+	return val
 }
 
 // handleFailure 处理拉取失败的情况，包括连续失败计数和告警。
