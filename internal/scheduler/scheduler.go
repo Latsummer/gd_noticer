@@ -213,18 +213,30 @@ func (s *Scheduler) execute(ctx context.Context) {
 		"uptime", quote.Uptime,
 	)
 
-	// 第二步：解析价格，更新价格历史和日内高低点
+	// 第二步：跨天检查（仅重置日期，不更新高低点）
 	currentPrice := parsePrice(quote.LastPrice)
 	todayDate := now.In(s.loc).Format("2006-01-02")
 
 	s.store.Update(func(st *state.State) {
-		// 跨天重置日内高低点
 		if st.DailyDate != todayDate {
 			slog.Info("跨天重置日内高低点", "old_date", st.DailyDate, "new_date", todayDate)
 			st.ResetDaily(todayDate)
 		}
+	})
 
-		// 追加到价格历史
+	// 第三步：策略判定（在更新价格历史和高低点之前，用旧 state 评估）
+	st := s.store.Get()
+	decision := s.evaluator.Evaluate(quote, st)
+
+	slog.Info("策略判定完成",
+		"event", "decide",
+		"should_notify", decision.ShouldNotify,
+		"notify_type", decision.NotifyType.String(),
+		"reason", decision.Reason,
+	)
+
+	// 第四步：更新价格历史和日内高低点（评估完成后再写入）
+	s.store.Update(func(st *state.State) {
 		if currentPrice > 0 {
 			st.AddPricePoint(state.PricePoint{
 				Price:  currentPrice,
@@ -232,7 +244,6 @@ func (s *Scheduler) execute(ctx context.Context) {
 				Uptime: quote.Uptime,
 			}, s.cfg.Strategy.PriceHistorySize)
 
-			// 更新日内高低点
 			timeStr := now.In(s.loc).Format("15:04:05")
 			if st.DailyHigh == 0 || currentPrice > st.DailyHigh {
 				st.DailyHigh = currentPrice
@@ -245,22 +256,13 @@ func (s *Scheduler) execute(ctx context.Context) {
 		}
 	})
 
-	// 第三步：策略判定（使用更新后的 state）
-	st := s.store.Get()
-	decision := s.evaluator.Evaluate(quote, st)
-
-	slog.Info("策略判定完成",
-		"event", "decide",
-		"should_notify", decision.ShouldNotify,
-		"notify_type", decision.NotifyType.String(),
-		"reason", decision.Reason,
-	)
-
-	// 第四步：发送通知（如果需要）
+	// 第五步：发送通知（如果需要），用评估时的 state 快照格式化内容
 	if decision.ShouldNotify {
+		// 通知格式化用评估后、更新后的 state（包含最新高低点，展示更准确）
+		formatSt := s.store.Get()
 		isFusion := s.cfg.GoldAPI.ApiType == "fusion"
 		title, body := strategy.FormatNotification(
-			s.cfg.Notify.TitlePrefix, quote, st, decision,
+			s.cfg.Notify.TitlePrefix, quote, formatSt, decision,
 			s.cfg.GoldAPI.IDToName, isFusion,
 		)
 
@@ -272,7 +274,6 @@ func (s *Scheduler) execute(ctx context.Context) {
 				"title", title,
 				"notify_type", decision.NotifyType.String(),
 			)
-			// 更新通知状态
 			s.store.Update(func(st *state.State) {
 				st.LastNotifyAt = now
 				st.LastNotifyDigest = fmt.Sprintf("%s_%s", quote.Uptime, quote.LastPrice)
@@ -283,7 +284,7 @@ func (s *Scheduler) execute(ctx context.Context) {
 		}
 	}
 
-	// 第五步：更新拉取状态
+	// 第六步：更新拉取状态
 	s.store.Update(func(st *state.State) {
 		st.LastSuccessUptime = quote.Uptime
 		st.LastSuccessPrice = quote.LastPrice
