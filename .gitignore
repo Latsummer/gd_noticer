@@ -1,3 +1,5 @@
 /build/gd_notice
 /.idea/
 /data/state.json
+/.claude/
+/CLAUDE.md

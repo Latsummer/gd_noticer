@@ -1,8 +1,8 @@
 service:
   timezone: "Asia/Shanghai"
   poll_interval_seconds: 600
-  window_start: "09:10:00"
-  window_end: "19:00:00"
+  window_start: "09:00:00"
+  window_end: "22:30:00"
 
 gold_api:
   # API 类型：standard（标准行情）或 fusion（融合行情，整合SH金和国际金价）
