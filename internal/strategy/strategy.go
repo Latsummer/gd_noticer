@@ -24,6 +24,7 @@ const (
 	NotifyTrendReversal              // 趋势反转（拐点）
 	NotifyDailyHigh                  // 日内新高
 	NotifyDailyLow                   // 日内新低
+	NotifyRegularUpdate              // 定期更新（行情有变化 + 距上次通知超过间隔）
 	NotifySilentHeartbeat            // 静默保底
 )
 
@@ -42,6 +43,8 @@ func (t NotifyType) String() string {
 		return "daily_high"
 	case NotifyDailyLow:
 		return "daily_low"
+	case NotifyRegularUpdate:
+		return "regular_update"
 	case NotifySilentHeartbeat:
 		return "silent_heartbeat"
 	default:
@@ -58,13 +61,14 @@ type Decision struct {
 
 // StrategyConfig 定义策略参数。
 type StrategyConfig struct {
-	DedupByUptime       bool    // 是否基于 uptime 去重
-	MinChangePercent    float64 // 最小涨跌幅阈值（百分比，0 表示不过滤）—— 保留兼容
-	MaxSilentMinutes    int     // 最大静默时间（分钟），超过后强制发送心跳
-	IsFusion            bool    // 是否为融合行情模式
-	NotifyChangePercent float64 // 距上次通知的累计变化 % 阈值
-	TrendReversalCount  int     // 连续同向 N 次后反转视为拐点
-	PriceHistorySize    int     // 价格历史滑动窗口大小
+	DedupByUptime          bool    // 是否基于 uptime 去重
+	MinChangePercent       float64 // 最小涨跌幅阈值（百分比，0 表示不过滤）—— 保留兼容
+	MaxSilentMinutes       int     // 最大静默时间（分钟），超过后强制发送心跳
+	IsFusion               bool    // 是否为融合行情模式
+	NotifyChangePercent    float64 // 距上次通知的累计变化 % 阈值
+	TrendReversalCount     int     // 连续同向 N 次后反转视为拐点
+	PriceHistorySize       int     // 价格历史滑动窗口大小
+	RegularIntervalMinutes int     // 定期更新间隔（分钟），行情有变化且超过此间隔就通知（0 表示禁用）
 }
 
 // Evaluator 是策略评估器。
@@ -160,7 +164,23 @@ func (e *Evaluator) Evaluate(quote *gold.QuoteItem, st state.State) Decision {
 		}
 	}
 
-	// 规则7：静默保底
+	// 规则7：定期更新 — 行情有变化且距上次通知超过设定间隔
+	if e.cfg.RegularIntervalMinutes > 0 {
+		sinceLastNotify := now.Sub(st.LastNotifyAt)
+		if sinceLastNotify >= time.Duration(e.cfg.RegularIntervalMinutes)*time.Minute {
+			slog.Info("触发定期更新通知",
+				"since_last_notify_minutes", int(sinceLastNotify.Minutes()),
+				"regular_interval_minutes", e.cfg.RegularIntervalMinutes,
+			)
+			return Decision{
+				ShouldNotify: true,
+				NotifyType:   NotifyRegularUpdate,
+				Reason:       fmt.Sprintf("定期更新: 距上次通知 %d 分钟", int(sinceLastNotify.Minutes())),
+			}
+		}
+	}
+
+	// 规则8：静默保底
 	return e.checkSilentHeartbeat(st, now)
 }
 
@@ -306,6 +326,24 @@ func FormatNotification(prefix string, quote *gold.QuoteItem, st state.State, de
 		title = fmt.Sprintf("%s %s 📉今日新低", prefix, name)
 		body = fmt.Sprintf("现价: %s（前低 %.2f）\n%s",
 			quote.LastPrice, st.DailyLow, dailyRange)
+
+	case NotifyRegularUpdate:
+		lastNotifyPrice := parsePrice(st.LastNotifyPrice)
+		diff := currentPrice - lastNotifyPrice
+		pct := float64(0)
+		if lastNotifyPrice > 0 {
+			pct = diff / lastNotifyPrice * 100
+		}
+		arrow := "→"
+		if diff > 0 {
+			arrow = "↑"
+		} else if diff < 0 {
+			arrow = "↓"
+		}
+		sinceMin := int(time.Since(st.LastNotifyAt).Minutes())
+		title = fmt.Sprintf("%s %s 定期行情", prefix, name)
+		body = fmt.Sprintf("现价: %s %s (%+.2f%%)\n%s\n距上次通知: %d 分钟",
+			quote.LastPrice, arrow, pct, dailyRange, sinceMin)
 
 	case NotifySilentHeartbeat:
 		silentMin := int(time.Since(st.LastNotifyAt).Minutes())

@@ -57,12 +57,13 @@ type NotifyConfig struct {
 
 // StrategyConfig 定义通知策略参数。
 type StrategyConfig struct {
-	DedupByUptime       bool    `yaml:"dedup_by_uptime"`
-	MinChangePercent    float64 `yaml:"min_change_percent"`
-	MaxSilentMinutes    int     `yaml:"max_silent_minutes"`
-	NotifyChangePercent float64 `yaml:"notify_change_percent"` // 距上次通知的累计变化 % 阈值（默认 0.3）
-	TrendReversalCount  int     `yaml:"trend_reversal_count"`  // 连续同向 N 次后反转视为拐点（默认 3）
-	PriceHistorySize    int     `yaml:"price_history_size"`    // 价格历史滑动窗口大小（默认 10）
+	DedupByUptime          bool    `yaml:"dedup_by_uptime"`
+	MinChangePercent       float64 `yaml:"min_change_percent"`
+	MaxSilentMinutes       int     `yaml:"max_silent_minutes"`
+	NotifyChangePercent    float64 `yaml:"notify_change_percent"`    // 距上次通知的累计变化 % 阈值（默认 0.1）
+	TrendReversalCount     int     `yaml:"trend_reversal_count"`     // 连续同向 N 次后反转视为拐点（默认 3）
+	PriceHistorySize       int     `yaml:"price_history_size"`       // 价格历史滑动窗口大小（默认 10）
+	RegularIntervalMinutes int     `yaml:"regular_interval_minutes"` // 定期更新间隔分钟数（默认 30，0 表示禁用）
 }
 
 // ReliabilityConfig 定义可靠性相关参数。
@@ -112,13 +113,16 @@ func Load(path string) (*Config, error) {
 
 	// 设置新增配置项的默认值
 	if cfg.Strategy.NotifyChangePercent == 0 {
-		cfg.Strategy.NotifyChangePercent = 0.3
+		cfg.Strategy.NotifyChangePercent = 0.1
 	}
 	if cfg.Strategy.TrendReversalCount == 0 {
 		cfg.Strategy.TrendReversalCount = 3
 	}
 	if cfg.Strategy.PriceHistorySize == 0 {
 		cfg.Strategy.PriceHistorySize = 10
+	}
+	if cfg.Strategy.RegularIntervalMinutes == 0 {
+		cfg.Strategy.RegularIntervalMinutes = 30
 	}
 	if cfg.Service.MinPollIntervalSeconds == 0 {
 		cfg.Service.MinPollIntervalSeconds = 180

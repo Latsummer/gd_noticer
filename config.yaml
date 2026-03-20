@@ -31,11 +31,12 @@ notify:
 strategy:
   dedup_by_uptime: true
   min_change_percent: 0
-  max_silent_minutes: 120
+  max_silent_minutes: 30           # 静默保底：超过 30 分钟无通知则强制推送心跳
   # 智能通知策略
-  notify_change_percent: 0.3    # 距上次通知的累计变化 % 阈值
-  trend_reversal_count: 3       # 连续同向 N 次后反转视为拐点
-  price_history_size: 10        # 价格历史滑动窗口大小
+  notify_change_percent: 0.1       # 距上次通知的累计变化 % 阈值（约 ±1 元）
+  trend_reversal_count: 3          # 连续同向 N 次后反转视为拐点
+  price_history_size: 10           # 价格历史滑动窗口大小
+  regular_interval_minutes: 30     # 定期更新间隔（分钟），行情有变化且超过此间隔就推送
 
 reliability:
   http_timeout_seconds: 10
