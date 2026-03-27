@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,9 +160,29 @@ func (s *Scheduler) InWindow() bool {
 	return s.inWindow(time.Now().In(s.loc))
 }
 
-// tryExecute 尝试执行任务，先检查是否在时间窗口内。
+// isSkipDay 判断指定时刻是否为配置中跳过的星期几。
+func (s *Scheduler) isSkipDay(now time.Time) bool {
+	weekday := strings.ToLower(now.Weekday().String())
+	for _, skip := range s.cfg.Service.SkipDays {
+		if strings.ToLower(strings.TrimSpace(skip)) == weekday {
+			return true
+		}
+	}
+	return false
+}
+
+// tryExecute 尝试执行任务，先检查是否在工作日和时间窗口内。
 func (s *Scheduler) tryExecute(ctx context.Context) {
 	now := time.Now().In(s.loc)
+
+	// 检查是否为跳过的星期几
+	if s.isSkipDay(now) {
+		slog.Debug("当前为休息日，跳过执行",
+			"weekday", now.Weekday().String(),
+		)
+		return
+	}
+
 	if !s.inWindow(now) {
 		slog.Debug("当前不在时间窗口内，跳过执行",
 			"now", now.Format("15:04:05"),

@@ -3,9 +3,10 @@ service:
   poll_interval_seconds: 600
   window_start: "09:00:00"
   window_end: "22:30:00"
+  skip_days: ["Saturday", "Sunday"]  # 跳过的星期几，不拉取也不通知
   # 自适应轮询：根据价格波动率动态调整轮询间隔
   adaptive_poll: true
-  min_poll_interval_seconds: 180   # 高波动时最短轮询间隔（秒）
+  min_poll_interval_seconds: 120   # 高波动时最短轮询间隔（秒）
   max_poll_interval_seconds: 1200  # 低波动时最长轮询间隔（秒）
 
 gold_api:
@@ -34,8 +35,8 @@ strategy:
   max_silent_minutes: 30           # 静默保底：超过 30 分钟无通知则强制推送心跳
   # 智能通知策略
   notify_change_percent: 0.1       # 距上次通知的累计变化 % 阈值（约 ±1 元）
-  trend_reversal_count: 3          # 连续同向 N 次后反转视为拐点
-  price_history_size: 10           # 价格历史滑动窗口大小
+  trend_reversal_count: 2          # 连续同向 N 次后反转视为拐点
+  price_history_size: 12           # 价格历史滑动窗口大小
   regular_interval_minutes: 30     # 定期更新间隔（分钟），行情有变化且超过此间隔就推送
 
 reliability:

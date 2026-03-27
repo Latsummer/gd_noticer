@@ -25,13 +25,14 @@ type Config struct {
 
 // ServiceConfig 定义服务运行时参数。
 type ServiceConfig struct {
-	Timezone               string `yaml:"timezone"`
-	PollIntervalSeconds    int    `yaml:"poll_interval_seconds"`
-	WindowStart            string `yaml:"window_start"`
-	WindowEnd              string `yaml:"window_end"`
-	AdaptivePoll           bool   `yaml:"adaptive_poll"`             // 是否启用自适应轮询间隔
-	MinPollIntervalSeconds int    `yaml:"min_poll_interval_seconds"` // 自适应轮询最小间隔（秒）
-	MaxPollIntervalSeconds int    `yaml:"max_poll_interval_seconds"` // 自适应轮询最大间隔（秒）
+	Timezone               string   `yaml:"timezone"`
+	PollIntervalSeconds    int      `yaml:"poll_interval_seconds"`
+	WindowStart            string   `yaml:"window_start"`
+	WindowEnd              string   `yaml:"window_end"`
+	SkipDays               []string `yaml:"skip_days"`                 // 跳过的星期几（如 ["Saturday","Sunday"]）
+	AdaptivePoll           bool     `yaml:"adaptive_poll"`             // 是否启用自适应轮询间隔
+	MinPollIntervalSeconds int      `yaml:"min_poll_interval_seconds"` // 自适应轮询最小间隔（秒）
+	MaxPollIntervalSeconds int      `yaml:"max_poll_interval_seconds"` // 自适应轮询最大间隔（秒）
 }
 
 // GoldAPIConfig 定义黄金报价 API 的连接参数。
