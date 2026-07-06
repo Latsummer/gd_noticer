@@ -1,0 +1,23 @@
+services:
+  gd_notice:
+    image: ccr.ccs.tencentyun.com/leozzhao/gd_notice:v0.0.4
+    container_name: gd_notice
+    restart: unless-stopped
+    environment:
+      - GD_APP_KEY=${GD_APP_KEY}
+      - GD_SIGN=${GD_SIGN}
+      - DEVICE_KEYS=${DEVICE_KEYS}
+      - BARK_ICON=${BARK_ICON:-}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    # 如需启用 HTTP 健康检查，取消下方注释并在 config.yaml 中设置 http_server.enable: true
+    # ports:
+    #   - "18080:18080"
+    # healthcheck:
+    #   test: ["CMD", "wget", "-q", "--spider", "http://localhost:18080/healthz"]
+    #   interval: 60s
+    #   timeout: 5s
+    #   retries: 3

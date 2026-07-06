@@ -54,6 +54,7 @@ type NotifyConfig struct {
 	DeviceKeys    []string `yaml:"-"` // 解析后的设备密钥列表，不直接从 YAML 读取
 	Group         string   `yaml:"group"`
 	TitlePrefix   string   `yaml:"title_prefix"`
+	Icon          string   `yaml:"icon"` // 通知图标 URL，留空则不设置图标
 }
 
 // StrategyConfig 定义通知策略参数。

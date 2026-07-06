@@ -19,6 +19,7 @@ type barkRequest struct {
 	Body      string `json:"body"`
 	Group     string `json:"group"`
 	DeviceKey string `json:"device_key"`
+	Icon      string `json:"icon,omitempty"` // 通知图标 URL，为空时不下发该字段
 }
 
 // barkResponse 表示 Bark 推送 API 的响应体。
@@ -32,6 +33,7 @@ type BarkConfig struct {
 	Endpoint           string
 	DeviceKeys         []string
 	Group              string
+	Icon               string // 通知图标 URL，留空则不设置图标
 	HTTPTimeoutSeconds int
 }
 
@@ -106,6 +108,7 @@ func (b *BarkNotifier) sendToDevice(ctx context.Context, deviceKey, title, body 
 		Body:      body,
 		Group:     b.cfg.Group,
 		DeviceKey: deviceKey,
+		Icon:      b.cfg.Icon,
 	}
 
 	jsonData, err := json.Marshal(reqBody)

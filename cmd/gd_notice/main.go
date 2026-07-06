@@ -98,6 +98,7 @@ func main() {
 		Endpoint:           cfg.Notify.BarkEndpoint,
 		DeviceKeys:         cfg.Notify.DeviceKeys,
 		Group:              cfg.Notify.Group,
+		Icon:               cfg.Notify.Icon,
 		HTTPTimeoutSeconds: cfg.Reliability.HTTPTimeoutSeconds,
 	})
 

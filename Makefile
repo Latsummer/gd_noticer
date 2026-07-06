@@ -76,7 +76,7 @@ help:
 
 ## docker-build: 构建 Docker 镜像
 docker-build:
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker build --platform linux/amd64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	@echo "Docker 镜像构建完成: $(DOCKER_IMAGE):$(DOCKER_TAG)"
 
 ## docker-run: 运行 Docker 容器

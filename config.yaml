@@ -28,6 +28,8 @@ notify:
   device_keys: "${DEVICE_KEYS}"
   group: "gold-watch"
   title_prefix: "金价"
+  # 通知图标 URL（留空则不设置图标），支持环境变量注入
+  icon: "${BARK_ICON}"
 
 strategy:
   dedup_by_uptime: true
